@@ -1,6 +1,7 @@
 # FatWriter
 
 FatWriter provides a <cstdio> style multi-thread-safe user interface method for file stream writing:
+
 virtual void printf(const char * format, ...) = 0;
 
 FatWriter is designed for the following scenes：
