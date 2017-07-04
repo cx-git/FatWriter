@@ -16,7 +16,7 @@ class FatWriter
 {
 public:
 	explicit FatWriter(int file_limit, int capacity, int slow_milliseconds);
-	~FatWriter(void);
+	virtual ~FatWriter(void);
 
 	virtual FormatWriter * create(const std::string & path);
 

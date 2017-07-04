@@ -102,7 +102,7 @@ FormatWriter * FatWriter::create(const std::string & path)
 
 void FatWriter::maintain_fast_list(void)
 {
-	auto & itr = m_fasters.begin();
+	auto itr = m_fasters.begin();
 	while (itr != m_fasters.end())
 	{
 		if (itr->free_count > SPEED_MULTIPLE)
@@ -148,7 +148,7 @@ void FatWriter::maintain_slow_list(void)
 {
 	//glog("[%s]\n", __FUNCTION__);
 
-	auto & itr = m_slowers.begin();
+	auto itr = m_slowers.begin();
 	while (itr != m_slowers.end())
 	{
 		auto ret = itr->handler->flush();

@@ -30,7 +30,7 @@ class BufferWriter
 {
 public:
 	BufferWriter(const int capacity, const std::string & path);
-	~BufferWriter(void);
+	virtual ~BufferWriter(void);
 
 	std::string get_file_path(void);
 

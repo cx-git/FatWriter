@@ -3,12 +3,13 @@
 #include "BufferWriter.h"
 #include <cstdarg>
 #include <stdexcept>
+#include <cstring>
 
 
 BufferWriter::BufferWriter(const int capacity, const std::string & path)
-	: m_fs_path(path)
+	: m_cbuf_size(static_cast<int>(capacity * 0.7))
 	, m_cbuf_capacity(capacity)
-	, m_cbuf_size(static_cast<int>(capacity * 0.7))
+	, m_fs_path(path)
 {
 	m_cbuf_ptr = new char[m_cbuf_capacity];
 	if (m_cbuf_ptr == nullptr)
