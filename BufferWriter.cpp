@@ -89,18 +89,13 @@ void BufferWriter::printf(const char * format, ...)
 		m_cbuf_capacity *= 2;
 		m_cbuf_size = static_cast<int>(m_cbuf_capacity * 0.7);
 
-		m_expand_times++;
-
 		auto pcbuf = new char[m_cbuf_capacity];
 		if (pcbuf == nullptr)
 		{
 			throw std::bad_alloc();
 		}
 
-		if (m_expand_times > 2)
-		{
-			glog("[%s] expand buffer: %i\n", m_fs_path.c_str(), m_expand_times);
-		}
+		glog("[%s] expand buffer: %i\n", m_fs_path.c_str(), m_cbuf_capacity);
 
 		std::strcpy(pcbuf, m_cbuf_ptr);
 		delete [] m_cbuf_ptr;

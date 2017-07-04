@@ -23,7 +23,7 @@ FatWriter::FatWriter(int file_limit, int capacity, int slow_milliseconds)
 	}
 
 #ifdef GLOG
-	glog("[CTOR] FL:%i IC:%i Sms:%i Fms:%i\n", m_file_limit, m_initial_capacity, m_slow_milliseconds, m_fast_milliseconds);
+	glog("[%s] FL:%i IC:%i Sms:%i Fms:%i\n", __FUNCTION__, m_file_limit, m_initial_capacity, m_slow_milliseconds, m_fast_milliseconds);
 #endif // GLOG
 
 	m_bg_thread = std::thread([this]() {
@@ -77,7 +77,7 @@ FatWriter::~FatWriter()
 	m_slowers.clear();
 
 #ifdef GLOG
-	glog("[DTOR] (F/S):(%i/%i)\n", nfast, nslow);
+	glog("[%s] (F/S):(%i/%i)\n", __FUNCTION__, nfast, nslow);
 #endif // GLOG
 }
 

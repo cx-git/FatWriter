@@ -57,8 +57,6 @@ private:
 	char * m_cbuf_ptr{ nullptr };
 	BufferState m_cbuf_state{ BS_FREE };
 
-	int m_expand_times{ 0 };
-
 	std::string m_fs_path;
 	FILE * m_fs_ptr{ nullptr };
 };
