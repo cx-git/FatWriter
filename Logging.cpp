@@ -12,15 +12,21 @@ class LoggingGuard
 public:
 	LoggingGuard(void)
 	{
-		flog = fopen("fatwlog.txt", "a");
-		std::setvbuf(flog, nullptr, _IONBF, 0);
-		fprintf(flog, "[%s]\n", __FUNCTION__);
+		flog = fopen("_fw.log", "a");
+		if (flog != nullptr)
+		{
+			std::setvbuf(flog, nullptr, _IONBF, 0);
+			fprintf(flog, "[%s]\n", __FUNCTION__);
+		}
 	}
 
 	~LoggingGuard(void)
 	{
-		fprintf(flog, "[%s]\n", __FUNCTION__);
-		fclose(flog);
+		if (flog != nullptr)
+		{
+			fprintf(flog, "[%s]\n", __FUNCTION__);
+			fclose(flog);
+		}
 	}
 
 	std::mutex log_locker;
