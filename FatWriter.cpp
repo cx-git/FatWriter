@@ -1,29 +1,31 @@
 #include "Logging.h"
 #include "FatWriter.h"
 #include <stdexcept>
+#include <cassert>
 
 const int SPEED_MULTIPLE = 10;
 
+
 struct FatWriter::ManageUnit
 {
-	BufferWriter * handler;
-	int free_count{ 0 };
+	BufferWriter * pbw;
+	int buffer_free_count;
 };
 
 
-FatWriter::FatWriter(int file_limit, int capacity, int slow_milliseconds)
-	: m_file_limit(file_limit)
-	, m_initial_capacity(capacity)
-	, m_slow_milliseconds(slow_milliseconds)
-	, m_fast_milliseconds(slow_milliseconds / SPEED_MULTIPLE)
+FatWriter::FatWriter(int opening_files_limit, int buffer_capacity, int flush_interval_ms)
+	: m_file_limit(opening_files_limit)
+	, m_initial_capacity(buffer_capacity)
+	, m_slow_milliseconds(flush_interval_ms)
+	, m_fast_milliseconds(flush_interval_ms / SPEED_MULTIPLE)
 {
 	if (m_fast_milliseconds < 1)
 	{
-		throw std::logic_error("too fast");
+		throw std::logic_error("flush interval argument is too fast");
 	}
 
 #ifdef GLOG
-	glog("[%s] FL:%i IC:%i Sms:%i Fms:%i\n", __FUNCTION__, m_file_limit, m_initial_capacity, m_slow_milliseconds, m_fast_milliseconds);
+	glog("[%s] OFL:%i IBC:%i SFI(ms):%i FFI(ms):%i\n", __FUNCTION__, m_file_limit, m_initial_capacity, m_slow_milliseconds, m_fast_milliseconds);
 #endif // GLOG
 
 	m_bg_thread = std::thread([this]() {
@@ -33,7 +35,7 @@ FatWriter::FatWriter(int file_limit, int capacity, int slow_milliseconds)
 			std::this_thread::sleep_for(std::chrono::milliseconds(m_fast_milliseconds));
 			++n %= SPEED_MULTIPLE;
 
-			std::lock_guard<std::mutex> lockguard(m_locker);
+			std::lock_guard<std::mutex> lockguard(m_mtx);
 
 			this->maintain_fast_list();
 
@@ -59,45 +61,40 @@ FatWriter::~FatWriter()
 
 	m_bg_thread.join();
 
+#ifdef GLOG
 	auto nfast = m_fasters.size();
 	auto nslow = m_slowers.size();
+	glog("[%s] (F/S):(%i/%i)\n", __FUNCTION__, nfast, nslow);
+#endif // GLOG
 
 	for (auto & i: m_fasters)
 	{
-		delete i.handler;
-		i.handler = nullptr;
+		delete i.pbw;
+		i.pbw = nullptr;
 	}
 	m_fasters.clear();
 
 	for (auto & i : m_slowers)
 	{
-		delete i.handler;
-		i.handler = nullptr;
+		delete i.pbw;
+		i.pbw = nullptr;
 	}
 	m_slowers.clear();
 
-#ifdef GLOG
-	glog("[%s] (F/S):(%i/%i)\n", __FUNCTION__, nfast, nslow);
-#endif // GLOG
+	m_file_count = 0;
 }
 
 FormatWriter * FatWriter::create(const std::string & path)
 {
 	//glog("[%s] %s\n", __FUNCTION__, path.c_str());
 
-	ManageUnit unit;
+	auto ret = new BufferWriter(m_initial_capacity, path); // On failure, it throws a bad_alloc exception.
 
-	unit.handler = new BufferWriter(m_initial_capacity, path);
-	if (unit.handler == nullptr)
-	{
-		throw std::runtime_error(__FUNCTION__);
-	}
+	m_mtx.lock();
+	m_slowers.push_back(ManageUnit{ ret , 0 });
+	m_mtx.unlock();
 
-	std::lock_guard<std::mutex> lockguard(m_locker);
-
-	m_slowers.push_back(unit);
-
-	return static_cast<FormatWriter *>(unit.handler);
+	return static_cast<FormatWriter *>(ret);
 }
 
 void FatWriter::maintain_fast_list(void)
@@ -105,39 +102,29 @@ void FatWriter::maintain_fast_list(void)
 	auto itr = m_fasters.begin();
 	while (itr != m_fasters.end())
 	{
-		if (itr->free_count > SPEED_MULTIPLE)
+		if (itr->buffer_free_count > SPEED_MULTIPLE)
 		{
-			//glog("    slow: %s\n", itr->handler->get_file_path().c_str());
-			itr->free_count = 0;
+			itr->buffer_free_count = 0;
 			m_slowers.push_back(*itr);
 			itr = m_fasters.erase(itr);
 			continue;
 		}
 
-		auto ret = itr->handler->flush();
-
+		auto ret = itr->pbw->flush();
 		if (ret.lastest != BS_FREE)
 		{
-			this->apply_file_stream();
-
-			if (itr->handler->fsopen() != 0)
-			{
-				this->free_file_stream();
-				throw std::runtime_error(itr->handler->get_file_path().c_str());
-			}
-
-			//glog("    open file stream: %s\n", itr->handler->get_file_path().c_str());
-
-			ret = itr->handler->flush();
+			this->claim_opening_file();
+			itr->pbw->open_file();
+			ret = itr->pbw->flush();
 		}
-
+		assert(ret.lastest == BS_FREE);
 		if (ret.former == BS_FREE)
 		{
-			itr->free_count++;
+			itr->buffer_free_count++;
 		}
 		else
 		{
-			itr->free_count = 0;
+			itr->buffer_free_count = 0;
 		}
 
 		itr++;
@@ -146,61 +133,42 @@ void FatWriter::maintain_fast_list(void)
 
 void FatWriter::maintain_slow_list(void)
 {
-	//glog("[%s]\n", __FUNCTION__);
-
 	auto itr = m_slowers.begin();
 	while (itr != m_slowers.end())
 	{
-		auto ret = itr->handler->flush();
-
+		auto ret = itr->pbw->flush();
 		if (ret.lastest != BS_FREE)
 		{
-			this->apply_file_stream();
-
-			if (itr->handler->fsopen() != 0)
-			{
-				throw std::runtime_error(itr->handler->get_file_path().c_str());
-			}
-
-			//glog("    open file stream: %s\n", itr->handler->get_file_path().c_str());
-
-			ret = itr->handler->flush();
+			this->claim_opening_file();
+			itr->pbw->open_file();
+			ret = itr->pbw->flush();
 		}
-
+		assert(ret.lastest == BS_FREE);
 		switch (ret.former)
 		{
 		case BS_FREE:
-			itr->free_count++;
-			if (itr->free_count > SPEED_MULTIPLE)
+			itr->buffer_free_count++;
+			if (itr->buffer_free_count > SPEED_MULTIPLE && itr->pbw->is_file_open())
 			{
-				if (itr->handler->isopen())
-				{
-					if (itr->handler->fsclose() != 0)
-					{
-						throw std::runtime_error(itr->handler->get_file_path().c_str());
-					}
-
-					//glog("    close file stream: %s\n", itr->handler->get_file_path().c_str());
-
-					this->free_file_stream();
-				}
+				itr->pbw->close_file();
+				this->minus_opening_file();
 			}
 			break;
 
 		case BS_FILL:
-			itr->free_count = 0;
+			itr->buffer_free_count = 0;
 			break;
 
 		case BS_FULL:
 		case BS_EXPAND:
-			//glog("    fast: %s\n", itr->handler->get_file_path().c_str());
-			itr->free_count = 0;
+			itr->buffer_free_count = 0;
 			m_fasters.push_back(*itr);
 			itr = m_slowers.erase(itr);
 			continue;
 			break;
 
 		default:
+			throw std::logic_error("unknown buffer state");
 			break;
 		}
 
@@ -208,7 +176,7 @@ void FatWriter::maintain_slow_list(void)
 	}
 }
 
-void FatWriter::apply_file_stream(void)
+void FatWriter::claim_opening_file(void)
 {
 	if (m_file_count < m_file_limit)
 	{
@@ -216,41 +184,30 @@ void FatWriter::apply_file_stream(void)
 		return;
 	}
 
+	BufferWriter * pbw = nullptr;
+
 	/////////////////////////////////////////////////////////////////////////////////
 
-	BufferWriter * first_open_ptr = nullptr;
 	for (auto & i: m_slowers)
 	{
-		if (i.handler->isopen())
+		if (i.pbw->is_file_open())
 		{
-			if (first_open_ptr == nullptr)
+			if (pbw == nullptr)
 			{
-				first_open_ptr = i.handler;
+				pbw = i.pbw;
 			}
 
-			if (i.free_count > 0)
+			if (i.buffer_free_count > 0)
 			{
-				if (i.handler->fsclose() != 0)
-				{
-					throw std::runtime_error(i.handler->get_file_path().c_str());
-				}
-
-				//glog("[%s] swap from free slower: %s\n", __FUNCTION__, i.handler->get_file_path().c_str());
-
+				i.pbw->close_file();
 				return;
 			}
 		}
 	}
 
-	if (first_open_ptr != nullptr)
+	if (pbw != nullptr)
 	{
-		if (first_open_ptr->fsclose() != 0)
-		{
-			throw std::runtime_error(first_open_ptr->get_file_path().c_str());
-		}
-
-		//glog("[%s] swap from busy slower: %s\n", __FUNCTION__, first_open_ptr->get_file_path().c_str());
-
+		pbw->close_file();
 		return;
 	}
 
@@ -258,47 +215,33 @@ void FatWriter::apply_file_stream(void)
 
 	for (auto & i : m_fasters)
 	{
-		if (i.handler->isopen())
+		if (i.pbw->is_file_open())
 		{
-			if (first_open_ptr == nullptr)
+			if (pbw == nullptr)
 			{
-				first_open_ptr = i.handler;
+				pbw = i.pbw;
 			}
 
-			if (i.free_count > 0)
+			if (i.buffer_free_count > 0)
 			{
-				if (i.handler->fsclose() != 0)
-				{
-					throw std::runtime_error(i.handler->get_file_path().c_str());
-				}
-
-				//glog("[%s] swap from free faster: %s\n", __FUNCTION__, i.handler->get_file_path().c_str());
-
+				i.pbw->close_file();
 				return;
 			}
 		}
 	}
 
-	if (first_open_ptr != nullptr)
+	if (pbw != nullptr)
 	{
-		if (first_open_ptr->fsclose() != 0)
-		{
-			throw std::runtime_error(first_open_ptr->get_file_path().c_str());
-		}
-
-		//glog("[%s] swap from busy faster: %s, %i/%i\n", __FUNCTION__, first_open_ptr->get_file_path().c_str(), m_fasters.size(), m_slowers.size());
-
+		pbw->close_file();
 		return;
 	}
 
 	/////////////////////////////////////////////////////////////////////////////////
 
-	throw std::logic_error(__FUNCTION__);
+	throw std::logic_error("lost opening file unit");
 }
 
-void FatWriter::free_file_stream(void)
+void FatWriter::minus_opening_file(void)
 {
-	//glog("[%s]\n", __FUNCTION__);
-
 	m_file_count--;
 }

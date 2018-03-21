@@ -15,26 +15,19 @@ class FatWriter
 	: public WriterCreater
 {
 public:
-	explicit FatWriter(int file_limit, int capacity, int slow_milliseconds);
+	explicit FatWriter(int opening_files_limit, int buffer_capacity, int flush_interval_ms);
 	virtual ~FatWriter(void);
 
 	virtual FormatWriter * create(const std::string & path);
 
 private:
-	// [MultThread Unsafe] called by background thread
 	void maintain_fast_list(void);
-
-	// [MultThread Unsafe] called by background thread
 	void maintain_slow_list(void);
-
-	// [MultThread Unsafe] called by background thread
-	void apply_file_stream(void);
-
-	// [MultThread Unsafe] called by background thread
-	void free_file_stream(void);
+	void claim_opening_file(void);
+	void minus_opening_file(void);
 
 private:
-	std::mutex m_locker;
+	std::mutex m_mtx;
 
 	struct ManageUnit;
 
@@ -45,6 +38,7 @@ private:
 	std::atomic<bool> m_exit{ false };
 
 	int m_file_count{ 0 };
+
 	int m_file_limit;
 	int m_initial_capacity;
 	int m_slow_milliseconds;

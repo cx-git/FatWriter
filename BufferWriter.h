@@ -3,7 +3,6 @@
 #include <cstdio>
 #include <mutex>
 #include <string>
-#include <atomic>
 
 enum BufferState
 {
@@ -29,10 +28,8 @@ class BufferWriter
 	: public FormatWriter
 {
 public:
-	BufferWriter(const int capacity, const std::string & path);
+	explicit BufferWriter(const int capacity, const std::string & path);
 	virtual ~BufferWriter(void);
-
-	std::string get_file_path(void);
 
 	// [MultThread Safe] called by user thread
 	virtual void printf(const char * format, ...);
@@ -41,22 +38,22 @@ public:
 	BufferStateRet flush(void);
 
 	// [MultThread Unsafe] called by background thread
-	bool isopen(void);
+	bool is_file_open(void);
 
 	// [MultThread Unsafe] called by background thread
-	int fsopen(void);
+	void open_file(void);
 
 	// [MultThread Unsafe] called by background thread 
-	int fsclose(void);
+	void close_file(void);
 
 private:
 	std::mutex m_cbuf_locker;
 	int m_cbuf_length{ 0 };
 	int m_cbuf_size;
 	int m_cbuf_capacity;	
-	char * m_cbuf_ptr{ nullptr };
 	BufferState m_cbuf_state{ BS_FREE };
+	char * m_cbuf{ nullptr };
 
-	std::string m_fs_path;
-	FILE * m_fs_ptr{ nullptr };
+	const std::string m_file_path;
+	FILE * m_file{ nullptr };
 };
