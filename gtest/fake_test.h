@@ -19,4 +19,4 @@ struct TestCaseParameter
 	int seconds_bound;
 };
 
-int fake_test(FatWriterParameter fwp, TestCaseParameter tcp, string test_file_dir, string summary_path);
+int fake_test(FatWriterParameter fwp, TestCaseParameter tcp, string test_file_dir, string summary_path, string runtime_path);
