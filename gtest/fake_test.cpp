@@ -5,6 +5,7 @@
 #include <random>
 #include <cstdio>
 #include <iomanip>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 using std::cout;
@@ -12,7 +13,7 @@ using std::cerr;
 using std::endl;
 #include <vector>
 using std::vector;
-#include <cmath>
+#include <algorithm>
 #include <cassert>
 #include <thread>
 #include <ctime>
@@ -121,15 +122,15 @@ int fake_test(FatWriterParameter fwp, TestCaseParameter tcp, string test_file_di
 		file_paths.push_back(file_path);
 
 		vector<FakeRacer> racers;
-		auto racer_count = std::max(rand_int() % tcp.racer_count_bound, FIVE);
+		auto racer_count = std::max(static_cast<unsigned int>(rand_int() % tcp.racer_count_bound), FIVE);
 		for (size_t j = 0; j < racer_count; j++)
 		{
 			FakeRacer racer;
 
-			racer.write_times = std::max(rand_int() % tcp.write_times_bound, FIVE);
-			racer.interval_ms = std::max(rand_int() % tcp.seconds_bound, FIVE) * 1000 / racer.write_times;
+			racer.write_times = std::max(static_cast<unsigned int>(rand_int() % tcp.write_times_bound), FIVE);
+			racer.interval_ms = std::max(static_cast<unsigned int>(rand_int() % tcp.seconds_bound), FIVE) * 1000 / racer.write_times;
 
-			auto line_length = std::max(rand_int() % tcp.line_byte_bound, TEN);
+			auto line_length = std::max(static_cast<unsigned int>(rand_int() % tcp.line_byte_bound), TEN);
 			strncpy(LINE_BUF, LINE_LIB, line_length);
 			LINE_BUF[line_length] = '\0';
 			racer.line.assign(LINE_BUF);
@@ -232,7 +233,7 @@ int fake_test(FatWriterParameter fwp, TestCaseParameter tcp, string test_file_di
 		auto ch_count = 0;
 		for (size_t j = 0; j < file_racers[i].size(); j++)
 		{
-			ch_count += file_racers[i][j].line.size() * file_racers[i][j].write_times;
+			ch_count += static_cast<int>(file_racers[i][j].line.size()) * file_racers[i][j].write_times;
 		}
 
 		if (ch_count != file_sizes[i])

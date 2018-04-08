@@ -1,4 +1,4 @@
-#include "gtest\gtest.h"
+#include "gtest/gtest.h"
 #include "fake_test.h"
 #include "fatwriter.h"
 #include <exception>
@@ -26,16 +26,23 @@ TEST(fatwriter, wrong_init)
 
 TEST(fatwriter, fake_busy)
 {
-	const char summary_path[] = "H:/test/fatwriter/fake_summary.txt";
-	const char runtime_path[] = "H:/test/fatwriter/fake_runtime.txt";
-	ASSERT_EQ(0, ::fake_test(FatWriterParameter{ 1, 64, 1000 }, TestCaseParameter{ 10, 50, 512, 500, 10 }, "H:/test/fatwriter/tmp", summary_path, runtime_path));
+	const char summary_path[] = "fake_summary.txt";
+	const char runtime_path[] = "fake_runtime.txt";
+	ASSERT_EQ(0, ::fake_test(FatWriterParameter{ 1, 64, 1000 }, TestCaseParameter{ 10, 50, 512, 500, 10 }, "tmp", summary_path, runtime_path));
+}
+
+TEST(fatwriter, fake_idle)
+{
+	const char summary_path[] = "fake_summary.txt";
+	const char runtime_path[] = "fake_runtime.txt";
+	ASSERT_EQ(0, ::fake_test(FatWriterParameter{ 1, 512, 1000 }, TestCaseParameter{ 10, 2, 16, 1, 30 }, "tmp", summary_path, runtime_path));
 }
 
 TEST(fatwriter, fake_easy)
 {
-	const char summary_path[] = "H:/test/fatwriter/fake_summary.txt";
-	const char runtime_path[] = "H:/test/fatwriter/fake_runtime.txt";
-	ASSERT_EQ(0, ::fake_test(FatWriterParameter{ 5, 256, 100 }, TestCaseParameter{ 10, 50, 512, 500, 60 }, "H:/test/fatwriter/tmp", summary_path, runtime_path));
+	const char summary_path[] = "fake_summary.txt";
+	const char runtime_path[] = "fake_runtime.txt";
+	ASSERT_EQ(0, ::fake_test(FatWriterParameter{ 5, 256, 100 }, TestCaseParameter{ 10, 50, 512, 500, 60 }, "tmp", summary_path, runtime_path));
 }
 
 int main(int argc, char **argv)
