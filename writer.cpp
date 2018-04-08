@@ -1,7 +1,7 @@
 #include "writer.h"
 
 #include <cstdarg>
-
+#include <cstring>
 
 WriterImpl::WriterImpl(const int capacity, const std::string & path, Logger * logger)
 	: m_cbuf_size(static_cast<int>(capacity * 0.7))
@@ -67,7 +67,7 @@ void WriterImpl::release_buffer(void)
 {
 	if (m_cbuf != nullptr)
 	{
-		delete m_cbuf;
+		delete[] m_cbuf;
 		m_cbuf = nullptr;
 		m_cbuf_length = 0;
 		m_cbuf_state = BS_FREE;
